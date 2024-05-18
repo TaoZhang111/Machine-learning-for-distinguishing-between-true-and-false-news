@@ -1,0 +1,109 @@
+---
+title: "Project"
+author: "TaoZhang"
+date: "2024-05-18"
+output: html_document
+---
+```{r}
+library(stringi)
+library(car)
+library(dplyr)
+library(readr)
+```
+
+```{r}
+news <- read.csv("news.csv")
+```
+
+```{r}
+column_names <- colnames(news)
+print(column_names)
+```
+
+
+
+Problem 1: Does the length of the text word, the length of the text letter, the length of the title letter have any effect on the truth or falsity of the news?
+
+```{r}
+news$Fake.or.Real <- ifelse(news$Fake.or.Real == "F", 0, 1)
+```
+
+```{r}
+model1 <- glm(Fake.or.Real ~ mean_word_length + tfidf_sum_top30_true + tfidf_sum_top30_fake + tfidf_sum_top10_grams_real + tfidf_sum_top10_grams_fake, data = news, family = binomial)
+summary(model1)
+pchisq(21604, df=44871, lower.tail = F)
+```
+
+
+```{r}
+model2 <- glm(Fake.or.Real ~ as.factor(DayOfWeek) + mean_word_length + tfidf_sum_top30_true + tfidf_sum_top30_fake + tfidf_sum_top10_grams_real + tfidf_sum_top10_grams_fake, data = news, family = binomial)
+anova(model2, model1, test="Chisq")
+
+
+model3 <- glm(Fake.or.Real ~ word_count_category + mean_word_length + tfidf_sum_top30_true + tfidf_sum_top30_fake + tfidf_sum_top10_grams_real + tfidf_sum_top10_grams_fake, data = news, family = binomial)
+anova(model3, model1, test="Chisq")
+```
+
+```{r}
+model1 <- glm(Fake.or.Real ~word_count_category+as.factor(DayOfWeek)+ mean_word_length + tfidf_sum_top30_true + tfidf_sum_top30_fake + tfidf_sum_top10_grams_real + tfidf_sum_top10_grams_fake, data = news, family = binomial)
+vif(model1)
+plot(model1)
+```
+
+
+
+
+
+
+```{r}
+cd <- cooks.distance(model1)
+
+n <- length(cd)
+k <- length(coef(model1))
+threshold <- 4 / (n - k - 1)
+
+outliers <- which(cd > threshold)
+
+cleaned_data <- news[-outliers, ]
+
+model3 <- glm(Fake.or.Real ~ as.factor(DayOfWeek) + word_count_category + mean_word_length + tfidf_sum_top30_true + tfidf_sum_top30_fake + tfidf_sum_top10_grams_real + tfidf_sum_top10_grams_fake, data = cleaned_data, family = binomial)
+summary(model3)
+par(mfrow=c(2,2))
+plot(model3)
+
+
+```
+
+
+
+
+```{r}
+library(GGally)
+ggpairs(news)
+```
+
+```{r}
+test <- read.csv("praw_traned.csv")
+
+test$Fake.or.Real <- ifelse(test$Fake.or.Real == "F", 0, 1)
+```
+
+
+```{r}
+predicted_probabilities <- predict(model1, test, type="response")
+predicted_labels <- ifelse(predicted_probabilities >= 0.5, 1, 0)
+actual_labels <- test$Fake.or.Real
+
+confusion_matrix <- table(Predicted=predicted_labels, Actual=actual_labels)
+
+print(confusion_matrix)
+
+accuracy <- sum(predicted_labels == actual_labels) / length(actual_labels)
+print(paste("Accuracy:", accuracy))
+
+
+```
+
+
+
+
